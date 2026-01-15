@@ -350,6 +350,11 @@
             const a = document.getElementById('a').value;
             const p = document.getElementById('p').value;
             if(!s && !o && !a && !p) return alert('내용을 입력해주세요.');
+
+            const payload = {
+                patientId: currentPatientInfo.id, 
+                soapData: { s, o, a, p }
+            };
             
             ipcRenderer.send('save-soap-signed', { id: null, soapData: {s,o,a,p} });
         }

@@ -91,7 +91,16 @@
         .view-content { overflow-y: auto; flex: 1; padding-right: 10px; }
         .soap-row { margin-bottom: 15px; }
         .soap-label { color: white; font-weight: bold; display: block; margin-bottom: 5px; font-size: 1.05em; }
-        .soap-text { background: #202225; padding: 10px; border-radius: 6px; color: #dcddde; white-space: pre-wrap; line-height: 1.5; border: 1px solid #2f3136; }
+        
+        /* 마크다운 제거 후 텍스트 스타일 */
+        .soap-text { 
+            background: #202225; padding: 10px; border-radius: 6px; 
+            color: #dcddde; 
+            white-space: pre-wrap; /* 줄바꿈 유지 */
+            line-height: 1.5; 
+            border: 1px solid #2f3136; 
+        }
+        
         .writer-name { color: #ffd700; font-weight: bold; }
         .writer-major { color: #ffd700; font-size: 0.9em; }
         .modal-msg { color: white; font-size: 1.1em; margin-bottom: 20px; line-height: 1.5; }
@@ -221,6 +230,8 @@
 
     <script>
         const { ipcRenderer } = require('electron');
+        // 마크다운 관련 코드 모두 제거됨
+
         let allCharts = [];
         let existingPatientIds = []; 
         let allPatients = [];
@@ -232,13 +243,32 @@
             ipcRenderer.send('admin-get-charts');
         }
 
+        // ★ [핵심 1] 환자 ID로 실제 이름 찾기
+        function findPatientName(id, savedName) {
+            const found = allPatients.find(p => p.id === id);
+            if (found) return found.name;
+            if (savedName) return savedName;
+            return id;
+        }
+
+        // ★ [핵심 2] 환자 ID로 부서(콘텐츠) 이름 찾기
+        function findDeptName(patientId, savedDeptName) {
+            if (savedDeptName && savedDeptName !== 'Unknown') return savedDeptName;
+            const foundPatient = allPatients.find(p => p.id === patientId);
+            if (foundPatient && foundPatient.deptId) {
+                const foundDept = allDepts.find(d => d.id === foundPatient.deptId);
+                return foundDept ? foundDept.name : foundPatient.deptId;
+            }
+            return 'General';
+        }
+
         function generateChartId() {
-            const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+            const chars = 'abcdef0123456789';
             let newId = '';
             let isUnique = false;
             for(let k=0; k<100; k++) {
                 newId = '';
-                for (let i = 0; i < 6; i++) { newId += chars.charAt(Math.floor(Math.random() * chars.length)); }
+                for (let i = 0; i < 7; i++) { newId += chars.charAt(Math.floor(Math.random() * chars.length)); }
                 if (!existingPatientIds.includes(newId)) { isUnique = true; break; }
             }
             if(isUnique) document.getElementById('p-id').value = newId;
@@ -263,32 +293,28 @@
         }
         function closeAlert() { document.getElementById('alert-modal').style.display = 'none'; }
 
-        function getDeptNameByPatientId(pid) {
-            const foundPatient = allPatients.find(p => p.id === pid);
-            if(foundPatient && foundPatient.deptId) {
-                const foundDept = allDepts.find(d => d.id === foundPatient.deptId);
-                return foundDept ? foundDept.name : foundPatient.deptId;
-            }
-            return 'General';
-        }
-
+        // ★ [수정됨] 상세 보기 (이름 매칭 + 텍스트 그대로 표시)
         function openView(item) {
             const sData = item.soapData || {};
             const writerName = item.doctorName || item.doctorId;
             const writerMajor = item.doctorMajor ? `(${item.doctorMajor})` : '';
-            const pName = item.patientName || item.patientId;
+            
+            // 이름과 부서 찾기
+            const realName = findPatientName(item.patientId, item.patientName);
+            const realDept = findDeptName(item.patientId, item.deptName);
 
-            const deptName = getDeptNameByPatientId(item.patientId);
-            document.getElementById('v-dept').innerText = deptName;
-
-            document.getElementById('v-patient').innerText = `${pName} (${item.patientId})`;
+            document.getElementById('v-dept').innerText = realDept;
+            document.getElementById('v-patient').innerText = `${realName} (${item.patientId})`;
+            
             document.getElementById('v-writer').innerHTML = `${writerName} <span class="writer-major">${writerMajor}</span>`;
             document.getElementById('v-date').innerText = new Date(item.savedAt).toLocaleString();
             
+            // 텍스트 그대로 표시 (innerText)
             document.getElementById('v-s').innerText = sData.s || sData.S || '-';
             document.getElementById('v-o').innerText = sData.o || sData.O || '-';
             document.getElementById('v-a').innerText = sData.a || sData.A || '-';
             document.getElementById('v-p').innerText = sData.p || sData.P || '-';
+            
             document.getElementById('view-modal').style.display = 'flex';
         }
         function closeView() { document.getElementById('view-modal').style.display = 'none'; }
@@ -319,12 +345,10 @@
             if(id && pw && name) ipcRenderer.send('admin-add-user', { id, pw, name, role, major }); else showAlert('필수 정보를 입력하세요.');
         }
 
-        // 담당의 변경 함수 (배정 해제 지원)
         function updatePatientDoctor() {
             const patientId = document.getElementById('update-p-id').value;
             const doctorId = document.getElementById('update-doc-id').value;
             
-            // doctorId가 있거나, 'unassigned'인 경우 허용
             if (patientId && (doctorId || doctorId === 'unassigned')) {
                 ipcRenderer.send('admin-update-patient', { id: patientId, inChargeId: doctorId });
             } else {
@@ -344,7 +368,6 @@
             document.getElementById('p-dept').value = '';
             document.getElementById('u-role').value = 'doctor';
             
-            // 변경 폼 초기화
             document.getElementById('update-p-id').value = '';
             document.getElementById('update-doc-id').value = '';
             
@@ -354,10 +377,11 @@
 
         function filterCharts() {
             const keyword = document.getElementById('search-input').value.toLowerCase();
-            const filtered = allCharts.filter(c => 
-                (c.patientId && c.patientId.toLowerCase().includes(keyword)) ||
-                (c.patientName && c.patientName.toLowerCase().includes(keyword))
-            );
+            const filtered = allCharts.filter(c => {
+                const pName = findPatientName(c.patientId, c.patientName).toLowerCase();
+                return (c.patientId && c.patientId.toLowerCase().includes(keyword)) ||
+                       (pName && pName.includes(keyword));
+            });
             renderCharts(filtered);
         }
         function loadAllCharts() { refreshAllData(); }
@@ -366,20 +390,16 @@
             allPatients = data.patients || [];
             allDepts = data.departments || [];
             
-            // 1. 진료과 드롭다운
             const deptSelect = document.getElementById('p-dept');
             deptSelect.innerHTML = '<option value="">-- 콘텐츠 --</option>';
             if (data.departments) data.departments.forEach(d => deptSelect.innerHTML += `<option value="${d.id}">${d.name}</option>`);
 
-            // 2. 의사 드롭다운 (등록용 & 변경용)
             const docSelect = document.getElementById('p-incharge');
             const updateDocSelect = document.getElementById('update-doc-id');
             const currentDoc = docSelect.value;
             
             const docOptions = '<option value="">-- 개발진 선택 --</option>';
             docSelect.innerHTML = docOptions;
-            
-            // 변경용에는 "배정 해제" 옵션 추가
             updateDocSelect.innerHTML = '<option value="">-- 변경할 개발진 선택 --</option>';
             updateDocSelect.innerHTML += `<option value="unassigned" style="color:#ed4245; font-weight:bold;">⛔ 배정 해제 (None)</option>`;
 
@@ -395,7 +415,6 @@
             }
             if(currentDoc) docSelect.value = currentDoc;
 
-            // 3. 환자 드롭다운 (변경용)
             const updatePatientSelect = document.getElementById('update-p-id');
             updatePatientSelect.innerHTML = '<option value="">-- 항목 선택 --</option>';
             if (data.patients) {
@@ -414,6 +433,7 @@
             renderCharts(allCharts);
         });
 
+        // ★ [수정됨] 차트 목록 렌더링 (이름 매칭 + 텍스트 그대로 표시)
         function renderCharts(list) {
             const ul = document.getElementById('chart-list');
             ul.innerHTML = '';
@@ -430,16 +450,17 @@
                 const writerName = c.doctorName || c.doctorId;
                 const writerMajor = c.doctorMajor ? `(${c.doctorMajor})` : '';
                 const dateStr = new Date(c.savedAt).toLocaleString();
-                const patientDisplay = c.patientName || c.patientId;
-                const deptName = getDeptNameByPatientId(c.patientId);
+                
+                // 이름과 부서 찾기
+                const realName = findPatientName(c.patientId, c.patientName);
+                const realDept = findDeptName(c.patientId, c.deptName);
 
                 li.innerHTML = `
                     <div style="display:flex; flex-direction:column; gap:8px;">
-                        
                         <div style="display:flex; justify-content:space-between; align-items:flex-start;">
                             <div>
-                                <span class="common-badge badge-dept">${deptName}</span>
-                                <span class="common-badge badge-patient">${patientDisplay}</span>
+                                <span class="common-badge badge-dept">${realDept}</span>
+                                <span class="common-badge badge-patient">${realName} (${c.patientId})</span>
                             </div>
                             <button class="del-btn" style="margin:0;" onclick="event.stopPropagation(); deleteChart(${c.id})">삭제</button>
                         </div>
