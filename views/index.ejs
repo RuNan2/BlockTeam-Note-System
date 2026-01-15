@@ -31,26 +31,39 @@
             background: #40444b; border: 1px solid #2f3136; color: white; 
             padding: 12px; border-radius: 6px; resize: none; font-size: 1em; line-height: 1.4;
             -webkit-app-region: no-drag !important;
+            font-family: 'Segoe UI', sans-serif; /* 폰트 통일 */
         }
         textarea:focus { outline: 2px solid #5865f2; outline-offset: -2px; background: #40444b; }
         
         label { color: #b9bbbe; font-weight: bold; margin-bottom: 5px; display: block; }
         
-        /* 4. 모달 스타일 */
-        #custom-modal {
+        /* 4. 모달 스타일 (상세보기용) */
+        .modal-overlay { 
             display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(0,0,0,0.7); z-index: 100;
             justify-content: center; align-items: center;
         }
-        .modal-content {
-            background: #2f3136; padding: 25px; border-radius: 12px; 
-            border: 1px solid #5865f2; text-align: center; width: 300px;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+        .view-box { 
+            background: #2f3136; padding: 30px; border-radius: 12px; 
+            border: 1px solid #3ba55c; width: 600px; max-height: 80vh; 
+            display: flex; flex-direction: column; box-shadow: 0 10px 30px rgba(0,0,0,0.5); 
         }
-        .modal-btn {
-            padding: 10px 20px; border-radius: 6px; border: none; cursor: pointer; font-weight: bold; margin: 5px;
-        }
+        .view-header { border-bottom: 1px solid #444; padding-bottom: 15px; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; }
+        .view-content { overflow-y: auto; flex: 1; padding-right: 10px; }
         
+        .soap-row { margin-bottom: 15px; }
+        .soap-label { color: white; font-weight: bold; display: block; margin-bottom: 5px; font-size: 1.05em; }
+        
+        /* ★ [중요] 텍스트 그대로 보여주기 (줄바꿈 유지) */
+        .soap-text { 
+            background: #202225; padding: 10px; border-radius: 6px; 
+            color: #dcddde; 
+            white-space: pre-wrap; /* 줄바꿈, 띄어쓰기 유지 */
+            line-height: 1.5; 
+            border: 1px solid #2f3136; 
+            font-size: 1em;
+        }
+
         /* 5. 환자 정보 헤더 */
         .patient-info { 
             background: #202225; padding: 20px; border-radius: 8px; margin-bottom: 20px; 
@@ -90,19 +103,10 @@
         .writer-major { color: #ffd700; font-size: 0.85em; font-weight: normal; margin-left: 3px; }
         .history-summary { color: white; font-weight: bold; font-size: 1.05em; margin-top: 8px; }
         
-        /* 뷰어 모드 전용 안내 문구 스타일 */
         #viewer-msg {
-            display: none;
-            flex: 1; 
-            justify-content: center; 
-            align-items: center; 
-            color: #72767d; 
-            font-size: 1.5em; 
-            border: 3px dashed #40444b; 
-            border-radius: 12px;
-            margin-bottom: 20px;
-            text-align: center;
-            background: #2f3136;
+            display: none; flex: 1; justify-content: center; align-items: center; 
+            color: #72767d; font-size: 1.5em; border: 3px dashed #40444b; 
+            border-radius: 12px; margin-bottom: 20px; text-align: center; background: #2f3136;
         }
 
         ::-webkit-scrollbar { width: 8px; background: #2f3136; }
@@ -110,12 +114,28 @@
     </style>
 </head>
 <body>
-    <div id="custom-modal">
-        <div class="modal-content">
-            <h3 style="color:white; margin-top:0;">📝 기록 불러오기</h3>
-            <p style="color:#b9bbbe; margin-bottom:20px;">이 내용을 불러와서<br>새 기록으로 작성하시겠습니까?</p>
-            <button class="modal-btn" style="background:#5865f2; color:white;" onclick="confirmLoad()">불러오기</button>
-            <button class="modal-btn" style="background:#ed4245; color:white;" onclick="closeModal()">취소</button>
+    <div id="view-modal" class="modal-overlay">
+        <div class="view-box">
+            <div class="view-header">
+                <div>
+                    <h2 style="color:white; margin:0;">📄 차팅 상세</h2>
+                    <div style="color:#b9bbbe; margin-top:5px; font-size:0.9em;">
+                        작성일: <span id="v-date" style="color:white;">-</span> | 작성자: <span id="v-writer" style="color:#ffd700;">-</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="view-content">
+                <div class="soap-row"><span class="soap-label">Description (설명)</span><div id="v-s" class="soap-text"></div></div>
+                <div class="soap-row"><span class="soap-label">Objective (객관적 사실 및 목표)</span><div id="v-o" class="soap-text"></div></div>
+                <div class="soap-row"><span class="soap-label">Assessment (진단 및 평가)</span><div id="v-a" class="soap-text"></div></div>
+                <div class="soap-row"><span class="soap-label">Plan (계획)</span><div id="v-p" class="soap-text"></div></div>
+            </div>
+            
+            <div style="margin-top:20px; display:flex; justify-content: flex-end; gap: 10px;">
+                <button onclick="loadFromHistory()" style="padding:10px 20px; background:#3ba55c; border:none; border-radius:6px; color:white; font-weight:bold; cursor:pointer;">📥 불러오기</button>
+                <button onclick="closeView()" style="padding:10px 20px; background:#4f545c; border:none; border-radius:6px; color:white; font-weight:bold; cursor:pointer;">닫기</button>
+            </div>
         </div>
     </div>
 
@@ -168,8 +188,10 @@
 
     <script>
         const { ipcRenderer } = require('electron');
+        // 마크다운 관련 코드 삭제됨
+
         let currentChartId = null; 
-        let pendingLoadItem = null;
+        let currentViewData = null; 
         let doctorList = [];
         let currentPatientInfo = null;
         let myRole = 'doctor'; 
@@ -258,54 +280,63 @@
                     </div>
                     <div class="history-summary">${showA ? '[Dx] ' + showA : '[Sx] ' + (showS || '내용 없음')}</div>
                 `;
-                li.onclick = () => openModal(item);
+                li.onclick = () => openView(item);
                 list.appendChild(li);
             });
         });
 
-        function openModal(item) {
-            pendingLoadItem = item;
-            document.getElementById('custom-modal').style.display = 'flex';
-        }
-        function closeModal() {
-            document.getElementById('custom-modal').style.display = 'none';
-            pendingLoadItem = null;
-        }
-        function confirmLoad() {
-            if (myRole === 'viewer') {
-                alert('열람 전용 모드에서는 기록을 작성할 수 없습니다.');
-                closeModal();
-                return;
-            }
-            if (pendingLoadItem) doLoadChart(pendingLoadItem);
-            closeModal();
+        // ★ [상세 보기] 텍스트 그대로 출력 (innerText 사용)
+        function openView(item) {
+            currentViewData = item;
+            
+            const data = item.soapData;
+            const writerName = item.doctorName || item.doctorId;
+            const writerMajor = item.doctorMajor ? `(${item.doctorMajor})` : '';
+
+            document.getElementById('v-date').innerText = new Date(item.savedAt).toLocaleString();
+            document.getElementById('v-writer').innerText = `${writerName} ${writerMajor}`;
+
+            document.getElementById('v-s').innerText = data.s || data.S || '-';
+            document.getElementById('v-o').innerText = data.o || data.O || '-';
+            document.getElementById('v-a').innerText = data.a || data.A || '-';
+            document.getElementById('v-p').innerText = data.p || data.P || '-';
+
+            document.getElementById('view-modal').style.display = 'flex';
         }
 
-        function doLoadChart(item) {
-            const sData = item.soapData || {}; 
-            document.getElementById('input-area').innerHTML = `
-                <label>Description (설명)</label> <textarea id="s" placeholder="증상, 문제점, 해야할 일 등 항목에 대한 설명"></textarea>
-                <label>Objective (객관적 사실 및 목표)</label> <textarea id="o" placeholder="관찰 소견, 객관적 정보, 리스트업"></textarea>
-                <label>Assessment (진단 및 평가)</label> <textarea id="a" placeholder="문제점 진단, 평가, 진행도"></textarea>
-                <label>Plan (계획)</label> <textarea id="p" placeholder="앞으로의 계획"></textarea>
-            `;
-            document.getElementById('s').value = sData.s || sData.S || '';
-            document.getElementById('o').value = sData.o || sData.O || '';
-            document.getElementById('a').value = sData.a || sData.A || '';
-            document.getElementById('p').value = sData.p || sData.P || '';
-            currentChartId = null; 
-            const btn = document.getElementById('btn-save-action');
-            btn.innerText = "✨ 새 기록으로 저장 (New Save)";
-            btn.style.backgroundColor = "#eb459e"; 
+        function closeView() {
+            document.getElementById('view-modal').style.display = 'none';
+        }
+
+        function loadFromHistory() {
+            if (myRole === 'viewer') {
+                alert('열람 전용 모드에서는 불러올 수 없습니다.');
+                return;
+            }
+            if (!currentViewData) return;
+
+            if (confirm("현재 작성 중인 내용이 사라지고, 선택한 기록으로 덮어씌워집니다.\n계속하시겠습니까?")) {
+                const data = currentViewData.soapData;
+                
+                document.getElementById('s').value = data.s || data.S || '';
+                document.getElementById('o').value = data.o || data.O || '';
+                document.getElementById('a').value = data.a || data.A || '';
+                document.getElementById('p').value = data.p || data.P || '';
+                
+                const btn = document.getElementById('btn-save-action');
+                btn.innerText = "✨ 새 기록으로 저장 (New Save)";
+                btn.style.backgroundColor = "#eb459e";
+                
+                closeView();
+            }
         }
 
         function hardResetInputs() {
-            document.getElementById('input-area').innerHTML = `
-                <label>Description (설명)</label> <textarea id="s" placeholder="증상, 문제점, 해야할 일 등 항목에 대한 설명"></textarea>
-                <label>Objective (객관적 사실 및 목표)</label> <textarea id="o" placeholder="관찰 소견, 객관적 정보, 리스트업"></textarea>
-                <label>Assessment (진단 및 평가)</label> <textarea id="a" placeholder="문제점 진단, 평가, 진행도"></textarea>
-                <label>Plan (계획)</label> <textarea id="p" placeholder="앞으로의 계획"></textarea>
-            `;
+            document.getElementById('s').value = '';
+            document.getElementById('o').value = '';
+            document.getElementById('a').value = '';
+            document.getElementById('p').value = '';
+            
             currentChartId = null;
             const btn = document.getElementById('btn-save-action');
             btn.innerText = "💾 저장하기 (Save)";
@@ -319,7 +350,8 @@
             const a = document.getElementById('a').value;
             const p = document.getElementById('p').value;
             if(!s && !o && !a && !p) return alert('내용을 입력해주세요.');
-            ipcRenderer.send('save-soap-signed', { id: currentChartId, soapData: {s,o,a,p} });
+            
+            ipcRenderer.send('save-soap-signed', { id: null, soapData: {s,o,a,p} });
         }
         
         function requestRefresh() {
