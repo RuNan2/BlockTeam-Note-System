@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>콘텐츠 선택</title>
+    <link rel="stylesheet" href="../assets/style.css">
+    <style>
+        /* 전체 레이아웃 */
+        body { 
+            margin: 0; padding: 0; 
+            background-color: #36393f; 
+            height: 100vh; overflow: hidden;
+            display: flex; flex-direction: column;
+        }
+        
+        /* 1. 상단 헤더 */
+        .header { 
+            height: 60px; background: #202225; border-bottom: 1px solid #18191c;
+            display: flex; justify-content: space-between; align-items: center; 
+            padding: 0 25px; flex-shrink: 0;
+        }
+        .title { color: white; font-size: 1.2em; font-weight: bold; }
+        
+        /* 로그아웃 버튼 (작게 강제 고정) */
+        .logout-btn { 
+            background: #ed4245; 
+            color: white; 
+            border: none; 
+            
+            width: auto !important;
+            flex-grow: 0 !important;
+            
+            padding: 0 15px !important; 
+            font-size: 13px !important;
+            height: 32px !important;       
+            line-height: 32px !important;  
+            
+            border-radius: 4px; 
+            cursor: pointer; 
+            font-weight: bold;
+            margin-left: auto; 
+        }
+
+        /* 2. 메인 컨텐츠 (좌우 분할) */
+        .main-container {
+            display: flex; flex: 1; overflow: hidden;
+        }
+
+        /* [왼쪽] 진료과 목록 */
+        .dept-sidebar {
+            width: 250px; background: #2f3136; 
+            border-right: 1px solid #202225;
+            display: flex; flex-direction: column;
+            padding: 15px; overflow-y: auto;
+        }
+        .dept-item {
+            padding: 15px; margin-bottom: 8px; border-radius: 6px;
+            color: #b9bbbe; cursor: pointer; font-weight: bold;
+            transition: 0.2s; border: 1px solid transparent;
+        }
+        .dept-item:hover { background: #36393f; color: white; }
+        .dept-item.active { 
+            background: #5865f2; color: white; 
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+
+        /* [오른쪽] 환자 목록 영역 */
+        .patient-area {
+            flex: 1; padding: 25px; overflow-y: auto;
+            display: flex; flex-direction: column;
+        }
+
+        /* 검색창 */
+        .search-box { 
+            background: #202225; border: 1px solid #40444b; 
+            padding: 12px; border-radius: 8px; color: white; 
+            width: 100%; font-size: 1em; margin-bottom: 20px; box-sizing: border-box;
+        }
+        .search-box:focus { outline: 2px solid #5865f2; }
+
+        /* 환자 그리드 */
+        .patient-grid { 
+            display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); 
+            gap: 15px; 
+        }
+
+        /* 환자 카드 디자인 */
+        .patient-card {
+            background: #2f3136; border-radius: 8px; padding: 20px;
+            border: 1px solid #202225; cursor: pointer; transition: 0.2s;
+            display: flex; flex-direction: column; gap: 5px;
+            position: relative; box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .patient-card:hover { 
+            transform: translateY(-3px); 
+            border-color: #5865f2; 
+            background: #32353b;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+        }
+
+        .p-name { color: white; font-size: 1.3em; font-weight: bold; margin-bottom: 2px; }
+        .p-id { color: #72767d; font-size: 0.9em; font-family: monospace; background: #202225; display: inline-block; padding: 2px 6px; border-radius: 4px; width: fit-content;}
+        
+        /* 담당의 표시 (노란색) */
+        .p-incharge { 
+            color: #ffd700; font-size: 0.9em; font-weight: bold; margin-top: 10px; 
+            padding-top: 8px; border-top: 1px solid #40444b;
+            display: flex; align-items: center; gap: 5px;
+        }
+
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-thumb { background: #202225; border-radius: 4px; }
+        ::-webkit-scrollbar-track { background: #2f3136; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="title">🏥 콘텐츠 선택 (Contents Selection)</div>
+        <button class="logout-btn" onclick="window.location.href='login.ejs'">🚪 로그아웃</button>
+    </div>
+
+    <div class="main-container">
+        <div class="dept-sidebar" id="dept-list">
+            <div style="color:#72767d; text-align:center; margin-top:20px;">로딩중...</div>
+        </div>
+
+        <div class="patient-area">
+            <input type="text" id="search" class="search-box" placeholder="🔍 선택된 콘텐츠 내 검색..." onkeyup="filterPatients()">
+            
+            <h3 id="current-dept-title" style="color:white; margin-top:0; border-bottom:1px solid #444; padding-bottom:10px;">
+                ◀ 왼쪽에서 콘텐츠를 선택하세요
+            </h3>
+            
+            <div id="grid" class="patient-grid">
+                </div>
+        </div>
+    </div>
+
+    <script>
+        const { ipcRenderer } = require('electron');
+        
+        let allDepts = [];
+        let allPatients = [];
+        let doctorList = [];
+        let currentDeptId = null;
+
+        window.onload = () => {
+            requestData();
+            // ★ [추가됨] 3초마다 자동으로 데이터 새로고침 (Auto-Polling)
+            setInterval(requestData, 3000);
+        };
+
+        function requestData() {
+            ipcRenderer.send('request-metadata');
+        }
+
+        ipcRenderer.on('receive-metadata', (e, data) => {
+            // 데이터 업데이트
+            allDepts = data.departments || [];
+            allPatients = data.patients || [];
+            doctorList = data.users || []; 
+
+            // 사이드바 그리기 (이미 그려져 있고 개수가 같으면 다시 안 그림 -> 깜빡임 방지)
+            const sidebar = document.getElementById('dept-list');
+            // 협진 탭 포함해서 개수 계산 (협진 1개 + 진료과 N개)
+            const currentItemCount = sidebar.querySelectorAll('.dept-item').length;
+            const newItemCount = allDepts.length + 1; // +1은 협진 탭
+
+            if (currentItemCount !== newItemCount) {
+                renderDepartments();
+            }
+            
+            // ★ 데이터가 갱신되었으므로, 현재 보고 있는 환자 목록도 즉시 새로고침
+            if (currentDeptId) {
+                filterPatients();
+            }
+        });
+
+        // 1. 진료과 목록 그리기 (왼쪽)
+        function renderDepartments() {
+            const sidebar = document.getElementById('dept-list');
+            sidebar.innerHTML = ''; 
+
+            // ★ [추가됨] 협진(Consultation) - 전체 환자 검색 탭
+            const consultDiv = document.createElement('div');
+            consultDiv.className = 'dept-item';
+            consultDiv.innerText = '🤝 전체 검색';
+            consultDiv.style.color = '#3ba55c'; // 녹색으로 강조
+            consultDiv.style.borderColor = '#3ba55c';
+            consultDiv.onclick = () => selectDept('CONSULT', '전체', consultDiv);
+            sidebar.appendChild(consultDiv);
+
+            if (allDepts.length === 0) {
+                sidebar.innerHTML += '<div style="padding:10px; color:#72767d;">등록된 콘텐츠 없음</div>';
+                return;
+            }
+
+            allDepts.forEach(d => {
+                const div = document.createElement('div');
+                div.className = 'dept-item';
+                div.innerText = d.name; 
+                div.onclick = () => selectDept(d.id, d.name, div);
+                sidebar.appendChild(div);
+            });
+        }
+
+        // 2. 진료과 선택
+        function selectDept(deptId, deptName, element) {
+            currentDeptId = deptId;
+            const items = document.querySelectorAll('.dept-item');
+            items.forEach(i => i.classList.remove('active'));
+            if(element) element.classList.add('active');
+
+            // 협진 모드일 때와 일반 모드일 때 안내 메시지 다르게
+            if (deptId === 'CONSULT') {
+                document.getElementById('current-dept-title').innerText = `🤝 전체 항목 검색`;
+                document.getElementById('search').placeholder = "🔍 전체 항목 중 이름/번호 검색...";
+            } else {
+                document.getElementById('current-dept-title').innerText = `📂 ${deptName} 구성 항목`;
+                document.getElementById('search').placeholder = "🔍 선택된 콘텐츠 내 검색...";
+            }
+            
+            document.getElementById('search').value = '';
+            filterPatients();
+        }
+
+        // 3. 환자 필터링
+        function filterPatients() {
+            if (!currentDeptId) return; 
+
+            const keyword = document.getElementById('search').value.toLowerCase();
+            
+            const filtered = allPatients.filter(p => {
+                // ★ [핵심] 협진(CONSULT) 모드이면 진료과 상관없이 검색
+                const matchDept = (currentDeptId === 'CONSULT') ? true : (p.deptId === currentDeptId);
+                const matchKeyword = p.name.toLowerCase().includes(keyword) || p.id.toLowerCase().includes(keyword);
+                return matchDept && matchKeyword;
+            });
+
+            renderPatientGrid(filtered);
+        }
+
+        function renderPatientGrid(list) {
+            const grid = document.getElementById('grid');
+            grid.innerHTML = '';
+
+            if (list.length === 0) {
+                grid.innerHTML = '<div style="color:#72767d; padding:20px 0; font-size:1.1em; grid-column: 1 / -1;">해당 조건의 항목이 없습니다.</div>';
+                return;
+            }
+
+            list.forEach(p => {
+                let inChargeText = '<span style="color:#72767d; font-weight:normal;">배정 안됨</span>';
+                if (p.inChargeId) {
+                    const doc = doctorList.find(u => u.id === p.inChargeId);
+                    if (doc) {
+                        const major = doc.major ? `(${doc.major})` : '';
+                        inChargeText = `👑 ${doc.name} ${major}`;
+                    } else {
+                        inChargeText = `👑 ${p.inChargeId}`;
+                    }
+                }
+
+                const div = document.createElement('div');
+                div.className = 'patient-card';
+                div.onclick = () => {
+                    ipcRenderer.send('patient-selected', p); 
+                };
+                
+                // 협진 모드일 때는 환자가 어느 과인지 보여주는 게 좋음
+                const deptTag = (currentDeptId === 'CONSULT') 
+                    ? `<span style="background:#5865f2; font-size:0.7em; padding:2px 5px; border-radius:3px; float:right;">${p.deptId}</span>` 
+                    : '';
+
+                div.innerHTML = `
+                    <div class="p-name">${p.name} ${deptTag}</div>
+                    <div><span class="p-id">${p.id}</span></div>
+                    <div class="p-incharge">
+                        ${inChargeText}
+                    </div>
+                `;
+                grid.appendChild(div);
+            });
+        }
+    </script>
+</body>
+</html>

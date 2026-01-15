@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>BlockTeam-Note-Data 로그인</title>
+    <link rel="stylesheet" href="../assets/style.css">
+    <style>
+        /* ★ [추가됨] 저작권 문구 위치 및 스타일 */
+        .copyright {
+            position: fixed; /* 화면에 고정 */
+            bottom: 20px;    /* 바닥에서 20px */
+            left: 25px;     /* 오른쪽에서 25px */
+            color: #72767d;  /* 옅은 회색 */
+            font-size: 0.8em;
+            font-family: sans-serif;
+            opacity: 0.7;
+            pointer-events: none; /* 클릭 방지 */
+        }
+    </style>
+</head>
+<body>
+    <div class="login-wrapper">
+        <div class="login-box">
+            <h2 style="color: #eeeeee;">BlockTeam Note Data</h2>
+            <input type="text" id="uid" placeholder="ID">
+            <input type="password" id="upw" placeholder="Password">
+            <button onclick="tryLogin()">Login System</button>
+            <p id="msg" style="color: #ed4245; font-size: 0.9em; margin-top: 10px;"></p>
+        </div>
+    </div>
+
+    <div class="copyright">
+        &copy; 2026 BlockTeam. All rights reserved.
+    </div>
+
+    <script>
+        const { ipcRenderer } = require('electron');
+
+        function tryLogin() {
+            const id = document.getElementById('uid').value;
+            const password = document.getElementById('upw').value;
+            ipcRenderer.send('request-login', { id, password });
+        }
+
+        ipcRenderer.on('login-failed', (e, msg) => {
+            document.getElementById('msg').innerText = msg;
+        });
+        
+        // 엔터키 로그인 지원
+        document.getElementById('upw').addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') tryLogin();
+        });
+    </script>
+</body>
+</html>
