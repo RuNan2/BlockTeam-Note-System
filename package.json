@@ -1,6 +1,6 @@
 {
   "name": "blockteam-note-data",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "BlockTeam Note Data Application",
   "main": "main.js",
   "author": "BlockTeam",
@@ -45,4 +45,5 @@
       "shortcutName": "BlockTeam Note Data"
     }
   }
+
 }
